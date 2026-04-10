@@ -322,6 +322,12 @@
                  background:linear-gradient(135deg,#00d4aa,#0098ff); color:#000;">
           🤖 AI 自动中
         </button>
+        <button onclick="clearHistory()"
+          style="font-size:13px; border:1px solid rgba(239,68,68,0.4); border-radius:8px;
+                 padding:6px 14px; cursor:pointer; font-family:monospace;
+                 background:transparent; color:#ef4444;">
+          🗑️ 清空记录
+        </button>
         <a href="#" onclick="switchToVisitor()" class="preview-btn">预览访客界面 →</a>
       </div>
 
@@ -476,6 +482,12 @@ let adminWs      = null;
 let isTypingSent = false;
 let typingTimer  = null;
 
+// ── 清空历史 ─────────────────────────────────────────────
+function clearHistory() {
+  if (!confirm("确定清空所有消息记录？此操作不可撤销。")) return;
+  sendAdmin({ type: "CLEAR_HISTORY" });
+}
+
 // ── 模式切换 ─────────────────────────────────────────────
 function toggleMode() {
   sendAdmin({ type: "TOGGLE_MODE" });
@@ -514,8 +526,13 @@ function connectAdmin() {
 
     if (type === "SERVER_INFO") {
       document.getElementById("visitor-count").textContent = payload.visitors;
-      // 同步初始模式到按钮
       updateModeBtn(payload.aiMode);
+      // 渲染历史消息
+      if (payload.history && payload.history.length > 0) {
+        document.getElementById("empty-state")?.remove();
+        payload.history.forEach(msg => appendAdminMsg(msg.role, msg.text, msg.time));
+        appendSysEvent("── 以上为历史消息 ──");
+      }
     }
     if (type === "VISITOR_JOINED") {
       document.getElementById("visitor-count").textContent = payload.count;
@@ -537,6 +554,16 @@ function connectAdmin() {
     // ── AI 回复显示在后台 ──
     if (type === "AI_REPLY") {
       appendAdminMsg("operator", `🤖 ${payload.text}`, time());
+    }
+    // ── 清空历史反馈 ──
+    if (type === "HISTORY_CLEARED") {
+      document.getElementById("admin-msg-area").innerHTML =
+        `<div class="empty-state" id="empty-state">
+          <div class="empty-icon">🗑️</div>
+          <div>消息记录已清空</div>
+          <div style="font-size:11px;opacity:.5">等待新的访客消息…</div>
+        </div>`;
+      appendSysEvent("── 消息记录已清空 ──");
     }
   };
 

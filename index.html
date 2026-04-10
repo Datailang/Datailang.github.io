@@ -532,6 +532,32 @@ function doLogin() {
 // ══════════════════════════════════════════════════════════
 let visitorWs = null;
 
+// ── 联网搜索开关 ─────────────────────────────────────
+let webSearchEnabled = false;
+
+function toggleWebSearch() {
+  webSearchEnabled = !webSearchEnabled;
+  const toggle = document.getElementById("ws-toggle");
+  const knob   = document.getElementById("ws-knob");
+  const label  = document.getElementById("ws-label");
+  if (webSearchEnabled) {
+    toggle.style.background = "#f59e0b";
+    knob.style.left = "18px";
+    knob.style.background = "#fff";
+    label.style.color = "#f59e0b";
+    label.textContent = "已开启";
+  } else {
+    toggle.style.background = "#2d3748";
+    knob.style.left = "2px";
+    knob.style.background = "#4a5568";
+    label.style.color = "#4a5568";
+    label.textContent = "已关闭";
+  }
+  if (visitorWs && visitorWs.readyState === 1) {
+    visitorWs.send(JSON.stringify({ type: "TOGGLE_WEBSEARCH", payload: { enabled: webSearchEnabled } }));
+  }
+}
+
 function initVisitor() {
   appendAIMsg("你好！我是 FlossBot，有什么可以帮你的吗？✨");
   connectVisitor();

@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FlossBot — AI Assistant</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
   <style>
@@ -254,9 +253,79 @@
       display: flex; align-items: center; gap: 8px;
     }
     .sys-event::before, .sys-event::after { content:''; flex:1; height:1px; background: var(--border); }
+
+    /* ── Login View ── */
+    #login-view {
+      display: none; align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg); position: relative; overflow: hidden;
+    }
+    #login-view.show { display: flex; }
+    .login-shell {
+      width: 100%; max-width: 360px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.7);
+      animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1) both;
+      padding: 40px 32px;
+    }
+    .login-logo { text-align: center; font-size: 48px; margin-bottom: 12px; }
+    .login-title {
+      text-align: center; font-family: var(--font-display);
+      font-size: 22px; color: #fff; margin-bottom: 6px;
+    }
+    .login-sub {
+      text-align: center; font-size: 12px; color: var(--muted);
+      font-family: var(--font-mono); margin-bottom: 32px;
+    }
+    .login-input {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border); border-radius: 12px;
+      color: var(--text); font-size: 15px; font-family: var(--font-body);
+      padding: 12px 16px; outline: none; margin-bottom: 14px;
+      transition: border-color .2s; letter-spacing: 2px;
+    }
+    .login-input:focus { border-color: rgba(0,212,170,0.5); }
+    .login-input::placeholder { letter-spacing: 0; color: var(--muted); }
+    .login-btn {
+      width: 100%; background: linear-gradient(135deg,#00d4aa,#0098ff);
+      color: #000; font-weight: 700; font-size: 15px;
+      border: none; border-radius: 12px; padding: 13px;
+      cursor: pointer; font-family: var(--font-mono);
+      transition: opacity .2s; margin-bottom: 12px;
+    }
+    .login-btn:hover { opacity: 0.9; }
+    .login-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .login-error {
+      text-align: center; font-size: 12px; color: #f87171;
+      font-family: var(--font-mono); min-height: 18px;
+    }
+    .login-shake { animation: shake 0.4s ease; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-8px); }
+      40%,80% { transform: translateX(8px); }
+    }
+
+    /* ── Web Search Toggle ── */
+    #websearch-bar { display:flex; align-items:center; gap:8px; padding:6px 16px 0; font-family:monospace; font-size:12px; }
   </style>
 </head>
 <body>
+
+<!-- ══════════════ LOGIN VIEW ══════════════ -->
+<div id="login-view">
+  <div class="bg-orb orb1"></div>
+  <div class="bg-orb orb2"></div>
+  <div class="login-shell">
+    <div class="login-logo">🔐</div>
+    <div class="login-title">FlossBot 后台</div>
+    <div class="login-sub">OPERATOR CONSOLE · 请输入密码</div>
+    <input class="login-input" id="login-pwd" type="password" placeholder="输入管理员密码" autocomplete="off" />
+    <button class="login-btn" id="login-btn" onclick="doLogin()">进入后台 →</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
 
 <!-- ══════════════ VISITOR VIEW ══════════════ -->
 <div id="visitor-view">
@@ -278,21 +347,10 @@
       <div class="header-tag">AI</div>
     </div>
     <div class="msg-area" id="msg-area"></div>
-    <!-- 联网搜索开关 -->
-    <div id="websearch-bar" style="
-      display:flex; align-items:center; gap:8px;
-      padding:6px 16px 0; font-family:monospace; font-size:12px;
-    ">
+    <div id="websearch-bar">
       <span style="color:#4a5568;">🌐 联网搜索</span>
-      <div onclick="toggleWebSearch()" id="ws-toggle" style="
-        width:36px; height:20px; border-radius:10px; cursor:pointer;
-        background:#2d3748; position:relative; transition:background .2s; flex-shrink:0;
-      ">
-        <div id="ws-knob" style="
-          position:absolute; top:2px; left:2px;
-          width:16px; height:16px; border-radius:50%;
-          background:#4a5568; transition:all .2s;
-        "></div>
+      <div onclick="toggleWebSearch()" id="ws-toggle" style="width:36px;height:20px;border-radius:10px;cursor:pointer;background:#2d3748;position:relative;transition:background .2s;flex-shrink:0;">
+        <div id="ws-knob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#4a5568;transition:all .2s;"></div>
       </div>
       <span id="ws-label" style="color:#4a5568;">已关闭</span>
     </div>
@@ -320,7 +378,6 @@
           <span class="visitor-badge" id="visitor-count">0</span>
         </div>
       </nav>
-      <!-- 访客列表 -->
       <div style="margin-top:16px;">
         <div style="font-size:10px;color:#4a5568;font-family:monospace;letter-spacing:1px;margin-bottom:8px;padding-left:4px;">在线访客</div>
         <div id="visitor-list" style="display:flex;flex-direction:column;gap:4px;">
@@ -384,45 +441,96 @@ const uid  = () => Math.random().toString(36).slice(2,9);
 const time = () => new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"});
 const isAdmin = () => location.hash === "#admin";
 
+// ── 视图切换 ─────────────────────────────────────────────
 function render() {
-  document.getElementById("visitor-view").style.display = isAdmin() ? "none" : "flex";
-  document.getElementById("admin-view").style.display   = isAdmin() ? "block" : "none";
-  isAdmin() ? initAdmin() : initVisitor();
+  if (isAdmin()) {
+    // 检查是否已登录
+    if (sessionStorage.getItem("flossbot_auth")) {
+      showAdminView();
+    } else {
+      showLoginView();
+    }
+  } else {
+    document.getElementById("login-view").classList.remove("show");
+    document.getElementById("visitor-view").style.display = "flex";
+    document.getElementById("admin-view").style.display   = "none";
+    initVisitor();
+  }
 }
+
+function showLoginView() {
+  document.getElementById("login-view").classList.add("show");
+  document.getElementById("visitor-view").style.display = "none";
+  document.getElementById("admin-view").style.display   = "none";
+  setTimeout(() => document.getElementById("login-pwd").focus(), 100);
+  // Enter 键提交
+  document.getElementById("login-pwd").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doLogin();
+  });
+}
+
+function showAdminView() {
+  document.getElementById("login-view").classList.remove("show");
+  document.getElementById("visitor-view").style.display = "none";
+  document.getElementById("admin-view").style.display   = "block";
+  initAdmin();
+}
+
 window.addEventListener("hashchange", () => location.reload());
 function switchToVisitor() { location.hash = ""; }
+
+// ── 登录逻辑 ─────────────────────────────────────────────
+let loginWs = null;
+
+function doLogin() {
+  const pwd = document.getElementById("login-pwd").value.trim();
+  if (!pwd) return;
+
+  const btn = document.getElementById("login-btn");
+  const err = document.getElementById("login-error");
+  btn.disabled = true;
+  btn.textContent = "验证中…";
+  err.textContent = "";
+
+  // 通过 WebSocket 发送密码到服务器验证
+  loginWs = new WebSocket(`${WS_URL}?role=admin`);
+
+  loginWs.onopen = () => {
+    loginWs.send(JSON.stringify({ type: "AUTH", payload: { password: pwd } }));
+  };
+
+  loginWs.onmessage = (e) => {
+    const { type, payload } = JSON.parse(e.data);
+    if (type === "AUTH_SUCCESS") {
+      // 验证成功，存储登录状态
+      sessionStorage.setItem("flossbot_auth", payload.token);
+      loginWs.close();
+      showAdminView();
+    }
+    if (type === "AUTH_FAIL") {
+      btn.disabled = false;
+      btn.textContent = "进入后台 →";
+      err.textContent = "❌ 密码错误，请重试";
+      // 抖动效果
+      const shell = document.querySelector(".login-shell");
+      shell.classList.add("login-shake");
+      setTimeout(() => shell.classList.remove("login-shake"), 400);
+      document.getElementById("login-pwd").value = "";
+      document.getElementById("login-pwd").focus();
+    }
+  };
+
+  loginWs.onerror = () => {
+    btn.disabled = false;
+    btn.textContent = "进入后台 →";
+    err.textContent = "⚠ 服务器连接失败，请稍后重试";
+  };
+}
 
 // ══════════════════════════════════════════════════════════
 //  VISITOR
 // ══════════════════════════════════════════════════════════
 let visitorWs = null;
-
-// ── 联网搜索开关 ──────────────────────────────────────
-let webSearchEnabled = false;
-
-function toggleWebSearch() {
-  webSearchEnabled = !webSearchEnabled;
-  const toggle = document.getElementById("ws-toggle");
-  const knob   = document.getElementById("ws-knob");
-  const label  = document.getElementById("ws-label");
-  if (webSearchEnabled) {
-    toggle.style.background = "#f59e0b";
-    knob.style.left = "18px";
-    knob.style.background = "#fff";
-    label.style.color = "#f59e0b";
-    label.textContent = "已开启";
-  } else {
-    toggle.style.background = "#2d3748";
-    knob.style.left = "2px";
-    knob.style.background = "#4a5568";
-    label.style.color = "#4a5568";
-    label.textContent = "已关闭";
-  }
-  // 通知服务器
-  if (visitorWs && visitorWs.readyState === 1) {
-    visitorWs.send(JSON.stringify({ type: "TOGGLE_WEBSEARCH", payload: { enabled: webSearchEnabled } }));
-  }
-}
 
 function initVisitor() {
   appendAIMsg("你好！我是 FlossBot，有什么可以帮你的吗？✨");
@@ -443,6 +551,7 @@ function initVisitor() {
 function connectVisitor() {
   visitorWs = new WebSocket(`${WS_URL}?role=visitor`);
   visitorWs.onopen = () => {
+    visitorWsForSearch = visitorWs;
     document.getElementById("send-btn").disabled = false;
     document.getElementById("conn-banner").classList.remove("show");
   };
@@ -531,17 +640,11 @@ let adminWs      = null;
 let isTypingSent = false;
 let typingTimer  = null;
 
+function toggleMode() { sendAdmin({ type: "TOGGLE_MODE" }); }
+function selectVisitor(num) { sendAdmin({ type: "SELECT_VISITOR", payload: { num } }); }
 function clearHistory() {
   if (!confirm("确定清空所有消息记录？此操作不可撤销。")) return;
   sendAdmin({ type: "CLEAR_HISTORY" });
-}
-
-function toggleMode() {
-  sendAdmin({ type: "TOGGLE_MODE" });
-}
-
-function selectVisitor(num) {
-  sendAdmin({ type: "SELECT_VISITOR", payload: { num } });
 }
 
 function initAdmin() {
@@ -570,10 +673,31 @@ function initAdmin() {
 
 function connectAdmin() {
   adminWs = new WebSocket(`${WS_URL}?role=admin`);
-  adminWs.onopen = () => { setAdminStatus(true); };
+  adminWs.onopen = () => {
+    // 连接后立即发送密码认证（从 sessionStorage 取 token 不行，直接重新认证）
+    // 这里 sessionStorage 只是前端标志位，真正的认证还是每次连接时发密码
+    // 所以需要把密码存一下（只存在内存里）
+    if (_adminPwd) {
+      adminWs.send(JSON.stringify({ type: "AUTH", payload: { password: _adminPwd } }));
+    } else {
+      // token 过期或刷新了页面，重新去登录
+      sessionStorage.removeItem("flossbot_auth");
+      location.reload();
+    }
+  };
 
   adminWs.onmessage = (e) => {
     const { type, payload } = JSON.parse(e.data);
+
+    if (type === "AUTH_SUCCESS") {
+      setAdminStatus(true);
+      return;
+    }
+    if (type === "AUTH_FAIL") {
+      sessionStorage.removeItem("flossbot_auth");
+      location.reload();
+      return;
+    }
 
     if (type === "SERVER_INFO") {
       document.getElementById("visitor-count").textContent = payload.visitors;
@@ -600,9 +724,7 @@ function connectAdmin() {
       updateActiveLabel(payload.activeVisitorNum);
       appendSysEvent(`访客${payload.num} 已离开（在线: ${payload.count}）`);
     }
-    if (type === "VISITOR_LIST") {
-      updateVisitorList(payload.list || []);
-    }
+    if (type === "VISITOR_LIST") { updateVisitorList(payload.list || []); }
     if (type === "USER_MESSAGE") {
       document.getElementById("empty-state")?.remove();
       appendAdminMsg("visitor", payload.text, payload.time, `访客${payload.visitorNum}`);
@@ -615,28 +737,22 @@ function connectAdmin() {
       const icon = payload.webSearch ? "🌐🤖" : "🤖";
       appendAdminMsg("operator", `${icon} ${payload.text}`, time(), `→ 访客${payload.visitorNum}`);
     }
-    if (type === "ACTIVE_VISITOR_CHANGED") {
-      updateActiveLabel(payload.num);
+    if (type === "ACTIVE_VISITOR_CHANGED") { updateActiveLabel(payload.num); }
+    if (type === "VISITOR_WEBSEARCH_CHANGED") {
+      const v = cachedVisitorList.find(v => v.num === payload.num);
+      if (v) v.webSearch = payload.webSearch;
+      updateVisitorList(null);
+      appendSysEvent(`访客${payload.num} ${payload.webSearch ? "🌐 开启了联网搜索" : "关闭了联网搜索"}`);
     }
     if (type === "HISTORY_CLEARED") {
       document.getElementById("admin-msg-area").innerHTML =
         `<div class="empty-state" id="empty-state">
           <div class="empty-icon">🗑️</div>
           <div>消息记录已清空</div>
-          <div style="font-size:11px;opacity:.5">等待新的访客消息…</div>
         </div>`;
       appendSysEvent("── 消息记录已清空 ──");
     }
-    if (type === "VISITOR_WEBSEARCH_CHANGED") {
-      // 更新本地缓存中对应访客的 webSearch 状态
-      const v = cachedVisitorList.find(v => v.num === payload.num);
-      if (v) v.webSearch = payload.webSearch;
-      updateVisitorList(null);
-      appendSysEvent(`访客${payload.num} ${payload.webSearch ? "🌐 开启了联网搜索" : "关闭了联网搜索"}`);
-    }
-    if (type === "SYS_MSG") {
-      appendSysEvent(payload.text);
-    }
+    if (type === "SYS_MSG") { appendSysEvent(payload.text); }
   };
 
   adminWs.onclose = () => {
@@ -646,14 +762,13 @@ function connectAdmin() {
   adminWs.onerror = () => adminWs.close();
 }
 
-// 本地缓存访客列表（用于 WEBSEARCH_CHANGED 后刷新）
+// 访客列表缓存
 let cachedVisitorList = [];
-
-function getVisitorList() { return cachedVisitorList; }
 
 function updateVisitorList(list) {
   if (list) cachedVisitorList = list;
   const el = document.getElementById("visitor-list");
+  if (!el) return;
   const renderList = cachedVisitorList;
   if (renderList.length === 0) {
     el.innerHTML = `<div style="font-size:12px;color:#4a5568;padding:8px 12px;font-family:monospace;">暂无访客</div>`;
@@ -682,6 +797,7 @@ function updateActiveLabel(num) {
 
 function updateModeBtn(aiMode) {
   const btn = document.getElementById("mode-btn");
+  if (!btn) return;
   if (aiMode) {
     btn.textContent = "🤖 AI 自动中";
     btn.style.background = "linear-gradient(135deg,#00d4aa,#0098ff)";
@@ -743,6 +859,56 @@ function setAdminStatus(connected) {
 
 function escHtml(str) {
   return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+}
+
+// ── 密码暂存（仅内存，不写 localStorage） ────────────────
+let _adminPwd = null;
+
+// 拦截登录成功后进入 admin，把密码存到内存
+const _origDoLogin = doLogin;
+// 重写 showAdminView 记录密码
+const _origShowAdmin = showAdminView;
+
+// 在 doLogin 里拦截密码
+function doLogin() {
+  const pwd = document.getElementById("login-pwd").value.trim();
+  if (!pwd) return;
+  _adminPwd = pwd;  // 存到内存
+
+  const btn = document.getElementById("login-btn");
+  const err = document.getElementById("login-error");
+  btn.disabled = true;
+  btn.textContent = "验证中…";
+  err.textContent = "";
+
+  loginWs = new WebSocket(`${WS_URL}?role=admin`);
+  loginWs.onopen = () => {
+    loginWs.send(JSON.stringify({ type: "AUTH", payload: { password: pwd } }));
+  };
+  loginWs.onmessage = (e) => {
+    const { type, payload } = JSON.parse(e.data);
+    if (type === "AUTH_SUCCESS") {
+      sessionStorage.setItem("flossbot_auth", "1");
+      loginWs.close();
+      showAdminView();
+    }
+    if (type === "AUTH_FAIL") {
+      _adminPwd = null;
+      btn.disabled = false;
+      btn.textContent = "进入后台 →";
+      err.textContent = "❌ 密码错误，请重试";
+      const shell = document.querySelector(".login-shell");
+      shell.classList.add("login-shake");
+      setTimeout(() => shell.classList.remove("login-shake"), 400);
+      document.getElementById("login-pwd").value = "";
+      document.getElementById("login-pwd").focus();
+    }
+  };
+  loginWs.onerror = () => {
+    btn.disabled = false;
+    btn.textContent = "进入后台 →";
+    err.textContent = "⚠ 服务器连接失败，请稍后重试";
+  };
 }
 
 render();

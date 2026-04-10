@@ -277,6 +277,24 @@
       <div class="header-tag">AI</div>
     </div>
     <div class="msg-area" id="msg-area"></div>
+    <!-- 联网搜索开关 -->
+    <div id="websearch-bar" style="
+      display:flex; align-items:center; gap:8px;
+      padding:6px 16px 0; font-family:monospace; font-size:12px;
+    ">
+      <span style="color:#4a5568;">🌐 联网搜索</span>
+      <div onclick="toggleWebSearch()" id="ws-toggle" style="
+        width:36px; height:20px; border-radius:10px; cursor:pointer;
+        background:#2d3748; position:relative; transition:background .2s; flex-shrink:0;
+      ">
+        <div id="ws-knob" style="
+          position:absolute; top:2px; left:2px;
+          width:16px; height:16px; border-radius:50%;
+          background:#4a5568; transition:all .2s;
+        "></div>
+      </div>
+      <span id="ws-label" style="color:#4a5568;">已关闭</span>
+    </div>
     <div class="input-bar">
       <textarea id="visitor-input" placeholder="输入消息，Enter 发送…" rows="1"></textarea>
       <button class="send-btn" id="send-btn" disabled>
@@ -377,6 +395,33 @@ function switchToVisitor() { location.hash = ""; }
 //  VISITOR
 // ══════════════════════════════════════════════════════════
 let visitorWs = null;
+
+// ── 联网搜索开关 ──────────────────────────────────────
+let webSearchEnabled = false;
+
+function toggleWebSearch() {
+  webSearchEnabled = !webSearchEnabled;
+  const toggle = document.getElementById("ws-toggle");
+  const knob   = document.getElementById("ws-knob");
+  const label  = document.getElementById("ws-label");
+  if (webSearchEnabled) {
+    toggle.style.background = "#f59e0b";
+    knob.style.left = "18px";
+    knob.style.background = "#fff";
+    label.style.color = "#f59e0b";
+    label.textContent = "已开启";
+  } else {
+    toggle.style.background = "#2d3748";
+    knob.style.left = "2px";
+    knob.style.background = "#4a5568";
+    label.style.color = "#4a5568";
+    label.textContent = "已关闭";
+  }
+  // 通知服务器
+  if (visitorWs && visitorWs.readyState === 1) {
+    visitorWs.send(JSON.stringify({ type: "TOGGLE_WEBSEARCH", payload: { enabled: webSearchEnabled } }));
+  }
+}
 
 function initVisitor() {
   appendAIMsg("你好！我是 FlossBot，有什么可以帮你的吗？✨");
@@ -566,7 +611,8 @@ function connectAdmin() {
       appendSysEvent(payload.aiMode ? "已切换为 🤖 AI 自动模式" : "已切换为 🙋 人工接管模式");
     }
     if (type === "AI_REPLY") {
-      appendAdminMsg("operator", `🤖 ${payload.text}`, time(), `→ 访客${payload.visitorNum}`);
+      const icon = payload.webSearch ? "🌐🤖" : "🤖";
+      appendAdminMsg("operator", `${icon} ${payload.text}`, time(), `→ 访客${payload.visitorNum}`);
     }
     if (type === "ACTIVE_VISITOR_CHANGED") {
       updateActiveLabel(payload.num);
@@ -580,6 +626,13 @@ function connectAdmin() {
         </div>`;
       appendSysEvent("── 消息记录已清空 ──");
     }
+    if (type === "VISITOR_WEBSEARCH_CHANGED") {
+      // 更新本地缓存中对应访客的 webSearch 状态
+      const v = cachedVisitorList.find(v => v.num === payload.num);
+      if (v) v.webSearch = payload.webSearch;
+      updateVisitorList(null);
+      appendSysEvent(`访客${payload.num} ${payload.webSearch ? "🌐 开启了联网搜索" : "关闭了联网搜索"}`);
+    }
     if (type === "SYS_MSG") {
       appendSysEvent(payload.text);
     }
@@ -592,13 +645,20 @@ function connectAdmin() {
   adminWs.onerror = () => adminWs.close();
 }
 
+// 本地缓存访客列表（用于 WEBSEARCH_CHANGED 后刷新）
+let cachedVisitorList = [];
+
+function getVisitorList() { return cachedVisitorList; }
+
 function updateVisitorList(list) {
+  if (list) cachedVisitorList = list;
   const el = document.getElementById("visitor-list");
-  if (list.length === 0) {
+  const renderList = cachedVisitorList;
+  if (renderList.length === 0) {
     el.innerHTML = `<div style="font-size:12px;color:#4a5568;padding:8px 12px;font-family:monospace;">暂无访客</div>`;
     return;
   }
-  el.innerHTML = list.map(v => `
+  el.innerHTML = renderList.map(v => `
     <div onclick="selectVisitor(${v.num})" style="
       display:flex; align-items:center; gap:8px;
       padding:8px 12px; border-radius:8px; cursor:pointer;
@@ -608,6 +668,7 @@ function updateVisitorList(list) {
     ">
       <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;box-shadow:0 0 4px #22c55e;"></span>
       <span style="font-size:13px;color:${v.active ? "#00d4aa" : "#e2e8f0"};font-family:monospace;">访客${v.num}</span>
+      ${v.webSearch ? '<span style="font-size:10px;color:#f59e0b;margin-left:2px;">🌐</span>' : ''}
       ${v.active ? '<span style="font-size:10px;color:#00d4aa;margin-left:auto;">回复中</span>' : ''}
     </div>
   `).join("");

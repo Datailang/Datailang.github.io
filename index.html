@@ -300,9 +300,14 @@
           <div class="nav-item-left">💬 实时对话</div>
           <span class="visitor-badge" id="visitor-count">0</span>
         </div>
-        <div class="nav-item" style="opacity:.35">📊 数据统计</div>
-        <div class="nav-item" style="opacity:.35">⚙️ 设置</div>
       </nav>
+      <!-- 访客列表 -->
+      <div style="margin-top:16px;">
+        <div style="font-size:10px;color:#4a5568;font-family:monospace;letter-spacing:1px;margin-bottom:8px;padding-left:4px;">在线访客</div>
+        <div id="visitor-list" style="display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:12px;color:#4a5568;padding:8px 12px;font-family:monospace;">暂无访客</div>
+        </div>
+      </div>
       <div class="sidebar-status" id="admin-status">
         <span class="status-dot disconnected" id="status-dot"></span>
         <span id="status-text">连接中…</span>
@@ -313,9 +318,8 @@
       <div class="admin-topbar">
         <div>
           <div class="admin-topbar-title">实时对话监控</div>
-          <div class="admin-topbar-sub">以 FlossBot AI 身份回复访客消息</div>
+          <div class="admin-topbar-sub">以 FlossBot AI 身份回复访客消息 &nbsp;·&nbsp; 当前回复：<span id="active-visitor-label" style="color:#00d4aa;">暂无</span></div>
         </div>
-        <!-- 模式切换按钮 -->
         <button id="mode-btn" onclick="toggleMode()"
           style="font-size:13px; border:none; border-radius:8px; padding:6px 16px;
                  cursor:pointer; font-family:monospace; font-weight:700;
@@ -361,7 +365,6 @@ const uid  = () => Math.random().toString(36).slice(2,9);
 const time = () => new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"});
 const isAdmin = () => location.hash === "#admin";
 
-// ── 视图切换 ─────────────────────────────────────────────
 function render() {
   document.getElementById("visitor-view").style.display = isAdmin() ? "none" : "flex";
   document.getElementById("admin-view").style.display   = isAdmin() ? "block" : "none";
@@ -482,15 +485,17 @@ let adminWs      = null;
 let isTypingSent = false;
 let typingTimer  = null;
 
-// ── 清空历史 ─────────────────────────────────────────────
 function clearHistory() {
   if (!confirm("确定清空所有消息记录？此操作不可撤销。")) return;
   sendAdmin({ type: "CLEAR_HISTORY" });
 }
 
-// ── 模式切换 ─────────────────────────────────────────────
 function toggleMode() {
   sendAdmin({ type: "TOGGLE_MODE" });
+}
+
+function selectVisitor(num) {
+  sendAdmin({ type: "SELECT_VISITOR", payload: { num } });
 }
 
 function initAdmin() {
@@ -527,35 +532,45 @@ function connectAdmin() {
     if (type === "SERVER_INFO") {
       document.getElementById("visitor-count").textContent = payload.visitors;
       updateModeBtn(payload.aiMode);
-      // 渲染历史消息
+      updateVisitorList(payload.visitorList || []);
+      updateActiveLabel(payload.activeVisitorNum);
       if (payload.history && payload.history.length > 0) {
         document.getElementById("empty-state")?.remove();
-        payload.history.forEach(msg => appendAdminMsg(msg.role, msg.text, msg.time));
+        payload.history.forEach(msg => {
+          const label = msg.num ? `访客${msg.num}` : null;
+          appendAdminMsg(msg.role, msg.text, msg.time, label);
+        });
         appendSysEvent("── 以上为历史消息 ──");
       }
     }
     if (type === "VISITOR_JOINED") {
       document.getElementById("visitor-count").textContent = payload.count;
-      appendSysEvent(`访客已连接（在线: ${payload.count}）`);
+      updateVisitorList(payload.list || []);
+      appendSysEvent(`访客${payload.num} 已连接（在线: ${payload.count}）`);
     }
     if (type === "VISITOR_LEFT") {
       document.getElementById("visitor-count").textContent = payload.count;
-      appendSysEvent(`访客已离开（在线: ${payload.count}）`);
+      updateVisitorList(payload.list || []);
+      updateActiveLabel(payload.activeVisitorNum);
+      appendSysEvent(`访客${payload.num} 已离开（在线: ${payload.count}）`);
+    }
+    if (type === "VISITOR_LIST") {
+      updateVisitorList(payload.list || []);
     }
     if (type === "USER_MESSAGE") {
       document.getElementById("empty-state")?.remove();
-      appendAdminMsg("visitor", payload.text, payload.time);
+      appendAdminMsg("visitor", payload.text, payload.time, `访客${payload.visitorNum}`);
     }
-    // ── 模式切换反馈 ──
     if (type === "MODE_CHANGE") {
       updateModeBtn(payload.aiMode);
       appendSysEvent(payload.aiMode ? "已切换为 🤖 AI 自动模式" : "已切换为 🙋 人工接管模式");
     }
-    // ── AI 回复显示在后台 ──
     if (type === "AI_REPLY") {
-      appendAdminMsg("operator", `🤖 ${payload.text}`, time());
+      appendAdminMsg("operator", `🤖 ${payload.text}`, time(), `→ 访客${payload.visitorNum}`);
     }
-    // ── 清空历史反馈 ──
+    if (type === "ACTIVE_VISITOR_CHANGED") {
+      updateActiveLabel(payload.num);
+    }
     if (type === "HISTORY_CLEARED") {
       document.getElementById("admin-msg-area").innerHTML =
         `<div class="empty-state" id="empty-state">
@@ -565,6 +580,9 @@ function connectAdmin() {
         </div>`;
       appendSysEvent("── 消息记录已清空 ──");
     }
+    if (type === "SYS_MSG") {
+      appendSysEvent(payload.text);
+    }
   };
 
   adminWs.onclose = () => {
@@ -572,6 +590,32 @@ function connectAdmin() {
     setTimeout(connectAdmin, 3000);
   };
   adminWs.onerror = () => adminWs.close();
+}
+
+function updateVisitorList(list) {
+  const el = document.getElementById("visitor-list");
+  if (list.length === 0) {
+    el.innerHTML = `<div style="font-size:12px;color:#4a5568;padding:8px 12px;font-family:monospace;">暂无访客</div>`;
+    return;
+  }
+  el.innerHTML = list.map(v => `
+    <div onclick="selectVisitor(${v.num})" style="
+      display:flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:8px; cursor:pointer;
+      background:${v.active ? "rgba(0,212,170,0.15)" : "rgba(255,255,255,0.03)"};
+      border:1px solid ${v.active ? "rgba(0,212,170,0.3)" : "transparent"};
+      transition:all .15s;
+    ">
+      <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;box-shadow:0 0 4px #22c55e;"></span>
+      <span style="font-size:13px;color:${v.active ? "#00d4aa" : "#e2e8f0"};font-family:monospace;">访客${v.num}</span>
+      ${v.active ? '<span style="font-size:10px;color:#00d4aa;margin-left:auto;">回复中</span>' : ''}
+    </div>
+  `).join("");
+}
+
+function updateActiveLabel(num) {
+  const el = document.getElementById("active-visitor-label");
+  if (el) el.textContent = num ? `访客${num}` : "暂无";
 }
 
 function updateModeBtn(aiMode) {
@@ -606,14 +650,15 @@ function sendAdminReply() {
   input.focus();
 }
 
-function appendAdminMsg(role, text, t) {
+function appendAdminMsg(role, text, t, label) {
   const area = document.getElementById("admin-msg-area");
   const row  = document.createElement("div");
-  row.className = `admin-msg-row from-${role === "operator" ? "admin" : "visitor"}`;
+  const isOp = role === "operator";
+  row.className = `admin-msg-row from-${isOp ? "admin" : "visitor"}`;
   row.innerHTML = `
-    <div class="admin-avatar ${role === "operator" ? "operator" : "visitor"}">${role === "operator" ? "🤖" : "👤"}</div>
+    <div class="admin-avatar ${isOp ? "operator" : "visitor"}">${isOp ? "🤖" : "👤"}</div>
     <div class="admin-bubble-wrap">
-      <div class="admin-bubble-meta">${role === "operator" ? "FlossBot（你）" : "访客·肉松？😈"} · ${t || time()}</div>
+      <div class="admin-bubble-meta">${label || (isOp ? "FlossBot（你）" : "访客")} · ${t || time()}</div>
       <div class="admin-bubble-text">${escHtml(text)}</div>
     </div>`;
   area.appendChild(row);

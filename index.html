@@ -18,6 +18,9 @@
       --border:    rgba(255,255,255,0.07);
       --accent:    #00d4aa;
       --accent2:   #0098ff;
+      --accent-glow: rgba(0,212,170,0.16);
+      --accent2-glow: rgba(0,152,255,0.18);
+      --ws-knob-on-left: 22px;
       --text:      #e2e8f0;
       --muted:     #4a5568;
       --user-bg:   linear-gradient(135deg, #0098ff, #00d4aa);
@@ -46,7 +49,7 @@
 
     .chat-shell {
       width: 100%; max-width: 460px; display: flex; flex-direction: column;
-      background: linear-gradient(165deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)) , var(--surface);
+      background: linear-gradient(165deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px; overflow: hidden;
       box-shadow: 0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,212,170,0.05);
@@ -59,7 +62,7 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: linear-gradient(120deg, rgba(0,212,170,0.16), transparent 30%, transparent 70%, rgba(0,152,255,0.18));
+      background: linear-gradient(120deg, var(--accent-glow), transparent 30%, transparent 70%, var(--accent2-glow));
       opacity: .35;
     }
     @keyframes slideUp {
@@ -376,7 +379,7 @@
       transition: all .2s;
     }
     .ws-toggle.on .ws-knob {
-      left: 20px;
+      left: var(--ws-knob-on-left);
       background: #fff;
     }
     .ws-label {
@@ -430,8 +433,8 @@
         <span>🌐 联网搜索</span>
       </div>
       <div class="ws-info">
-        <button onclick="toggleWebSearch()" id="ws-toggle" class="ws-toggle" aria-label="切换联网搜索" aria-pressed="false" type="button">
-          <span id="ws-knob" class="ws-knob"></span>
+        <button id="ws-toggle" class="ws-toggle" aria-label="联网搜索已关闭" aria-pressed="false" type="button">
+          <span class="ws-knob" aria-hidden="true"></span>
         </button>
         <span id="ws-label" class="ws-label">已关闭</span>
       </div>
@@ -624,11 +627,13 @@ function toggleWebSearch() {
   if (webSearchEnabled) {
     toggle.classList.add("on");
     toggle.setAttribute("aria-pressed", "true");
+    toggle.setAttribute("aria-label", "联网搜索已开启");
     label.classList.add("on");
     label.textContent = "已开启";
   } else {
     toggle.classList.remove("on");
     toggle.setAttribute("aria-pressed", "false");
+    toggle.setAttribute("aria-label", "联网搜索已关闭");
     label.classList.remove("on");
     label.textContent = "已关闭";
   }
@@ -642,6 +647,8 @@ function initVisitor() {
   connectVisitor();
   const input   = document.getElementById("visitor-input");
   const sendBtn = document.getElementById("send-btn");
+  const wsToggle = document.getElementById("ws-toggle");
+  wsToggle.addEventListener("click", toggleWebSearch);
   input.addEventListener("input", () => {
     sendBtn.disabled = !input.value.trim();
     input.style.height = "auto";

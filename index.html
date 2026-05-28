@@ -31,6 +31,11 @@
 
   <style type="text/tailwindcss">
     @layer base {
+      :root {
+        --accent: #06b6d4;
+        --border: rgba(6, 182, 212, 0.2);
+        --font-mono: 'Space Mono', monospace;
+      }
       body {
         @apply bg-dark text-gray-200 font-sans overflow-hidden antialiased;
         margin: 0; padding: 0;
@@ -107,6 +112,15 @@
       .ws-toggle.on .ws-knob { @apply bg-cyan-400 translate-x-[26px]; }
 
       .conn-banner { @apply bg-red-600 text-black py-2 px-4 shadow-[0_0_15px_rgba(220,38,38,0.4)] tracking-widest font-bold font-mono text-center text-xs uppercase z-[99]; }
+
+      /* JS 会动态注入这些类；原文件缺少定义会导致图标/状态显示异常 */
+      .robot-icon { @apply block w-6 h-6; }
+      .robot-icon-sm { @apply w-5 h-5; }
+      .robot-icon-lg { @apply w-9 h-9; }
+      .mode-btn-content { @apply inline-flex items-center justify-center gap-2 whitespace-nowrap; }
+      .status-dot { @apply w-2.5 h-2.5 rounded-full; }
+      .status-dot.connected { @apply bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,1)]; }
+      .status-dot.disconnected { @apply bg-red-500 shadow-[0_0_8px_rgba(239,68,68,1)]; }
     }
 
     @keyframes slideUp {
@@ -164,17 +178,17 @@
       <div id="msg-area" class="msg-area flex-1 overflow-y-auto p-4 sm:p-8 bg-black/30"></div>
 
       <!-- Web Search Toggle Bar -->
-      <div id="websearch-bar" class="flex items-center justify-between px-6 py-3 border-t border-cyan-500/20 bg-black/50 text-xs font-mono text-gray-400 tracking-widest shrink-0">
-        <div class="flex items-center gap-3 text-cyan-500/70">
+      <div id="websearch-bar" class="flex items-center justify-between gap-4 px-6 py-3 border-t border-cyan-500/20 bg-black/50 text-xs font-mono text-gray-400 tracking-widest shrink-0">
+        <div class="min-w-0 flex items-center gap-3 text-cyan-500/70">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
-          <span class="hidden sm:inline font-bold">EXTERNAL NEURAL SEARCH / KNOWLEDGE BASE UPLINK</span>
+          <span class="hidden sm:inline font-bold truncate">EXTERNAL NEURAL SEARCH / KNOWLEDGE BASE UPLINK</span>
           <span class="sm:hidden">WEB SEARCH</span>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 shrink-0">
           <button id="ws-toggle" class="ws-toggle" aria-label="Toggle network search" type="button">
             <span class="ws-knob"></span>
           </button>
-          <span id="ws-label" class="w-10 text-right font-bold text-gray-500">OFF</span>
+          <span id="ws-label" class="min-w-[4.5rem] text-right font-bold text-gray-500 whitespace-nowrap">OFF</span>
         </div>
       </div>
 
@@ -307,90 +321,66 @@ function initRobotAssets() {
 }
 
 // ── 视图切换 ─────────────────────────────────────────────
+function showView(id, display = "flex") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("hidden", "show");
+  el.style.display = display;
+}
+
+function hideView(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = "none";
+}
+
+let loginKeyBound = false;
+let visitorInited = false;
+let adminInited = false;
+
 function render() {
   if (isAdmin()) {
-    // 检查是否已登录
-    if (sessionStorage.getItem("flossbot_auth")) {
+    // 不要只凭 sessionStorage 进后台：刷新后 _adminPwd 会丢失，仍需要重新登录。
+    if (sessionStorage.getItem("flossbot_auth") && _adminPwd) {
       showAdminView();
     } else {
+      sessionStorage.removeItem("flossbot_auth");
       showLoginView();
     }
   } else {
-    document.getElementById("login-view").classList.remove("show");
-    document.getElementById("visitor-view").style.display = "flex";
-    document.getElementById("admin-view").style.display   = "none";
+    hideView("login-view");
+    hideView("admin-view");
+    showView("visitor-view", "flex");
     initVisitor();
   }
 }
 
 function showLoginView() {
-  document.getElementById("login-view").classList.add("show");
-  document.getElementById("visitor-view").style.display = "none";
-  document.getElementById("admin-view").style.display   = "none";
-  setTimeout(() => document.getElementById("login-pwd").focus(), 100);
-  // Enter 键提交
-  document.getElementById("login-pwd").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doLogin();
-  });
+  showView("login-view", "flex");
+  hideView("visitor-view");
+  hideView("admin-view");
+  setTimeout(() => document.getElementById("login-pwd")?.focus(), 100);
+
+  if (!loginKeyBound) {
+    loginKeyBound = true;
+    document.getElementById("login-pwd")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doLogin();
+    });
+  }
 }
 
 function showAdminView() {
-  document.getElementById("login-view").classList.remove("show");
-  document.getElementById("visitor-view").style.display = "none";
-  document.getElementById("admin-view").style.display   = "block";
+  hideView("login-view");
+  hideView("visitor-view");
+  showView("admin-view", "flex");
   initAdmin();
 }
 
 window.addEventListener("hashchange", () => location.reload());
 function switchToVisitor() { location.hash = ""; }
 
-// ── 登录逻辑 ─────────────────────────────────────────────
+// ── 登录逻辑变量 ─────────────────────────────────────────
 let loginWs = null;
-
-function doLogin() {
-  const pwd = document.getElementById("login-pwd").value.trim();
-  if (!pwd) return;
-
-  const btn = document.getElementById("login-btn");
-  const err = document.getElementById("login-error");
-  btn.disabled = true;
-  btn.textContent = "验证中…";
-  err.textContent = "";
-
-  // 通过 WebSocket 发送密码到服务器验证
-  loginWs = new WebSocket(`${WS_URL}?role=admin`);
-
-  loginWs.onopen = () => {
-    loginWs.send(JSON.stringify({ type: "AUTH", payload: { password: pwd } }));
-  };
-
-  loginWs.onmessage = (e) => {
-    const { type, payload } = JSON.parse(e.data);
-    if (type === "AUTH_SUCCESS") {
-      // 验证成功，存储登录状态
-      sessionStorage.setItem("flossbot_auth", payload.token);
-      loginWs.close();
-      showAdminView();
-    }
-    if (type === "AUTH_FAIL") {
-      btn.disabled = false;
-      btn.textContent = "进入后台 →";
-      err.textContent = "❌ 密码错误，请重试";
-      // 抖动效果
-      const shell = document.querySelector(".login-shell");
-      shell.classList.add("login-shake");
-      setTimeout(() => shell.classList.remove("login-shake"), 400);
-      document.getElementById("login-pwd").value = "";
-      document.getElementById("login-pwd").focus();
-    }
-  };
-
-  loginWs.onerror = () => {
-    btn.disabled = false;
-    btn.textContent = "进入后台 →";
-    err.textContent = "⚠ 服务器连接失败，请稍后重试";
-  };
-}
 
 // ══════════════════════════════════════════════════════════
 //  VISITOR
@@ -409,13 +399,13 @@ function toggleWebSearch() {
     toggle.setAttribute("aria-pressed", "true");
     toggle.setAttribute("aria-label", "联网搜索已开启");
     label.classList.add("on");
-    label.textContent = "已开启";
+    label.textContent = "开启";
   } else {
     toggle.classList.remove("on");
     toggle.setAttribute("aria-pressed", "false");
     toggle.setAttribute("aria-label", "联网搜索已关闭");
     label.classList.remove("on");
-    label.textContent = "已关闭";
+    label.textContent = "关闭";
   }
   if (visitorWs && visitorWs.readyState === 1) {
     visitorWs.send(JSON.stringify({ type: "TOGGLE_WEBSEARCH", payload: { enabled: webSearchEnabled } }));
@@ -423,6 +413,8 @@ function toggleWebSearch() {
 }
 
 function initVisitor() {
+  if (visitorInited) return;
+  visitorInited = true;
   appendAIMsg("你好！我是 FlossBot，有什么可以帮你的吗？✨");
   connectVisitor();
   const input   = document.getElementById("visitor-input");
@@ -443,9 +435,8 @@ function initVisitor() {
 function connectVisitor() {
   visitorWs = new WebSocket(`${WS_URL}?role=visitor`);
   visitorWs.onopen = () => {
-    visitorWsForSearch = visitorWs;
     document.getElementById("send-btn").disabled = false;
-    document.getElementById("conn-banner").classList.remove("show");
+    document.getElementById("conn-banner")?.classList.add("hidden");
   };
   visitorWs.onmessage = (e) => {
     const { type, payload } = JSON.parse(e.data);
@@ -454,7 +445,7 @@ function connectVisitor() {
   };
   visitorWs.onclose = () => {
     document.getElementById("send-btn").disabled = true;
-    document.getElementById("conn-banner").classList.add("show");
+    document.getElementById("conn-banner")?.classList.remove("hidden");
     setTimeout(connectVisitor, 3000);
   };
   visitorWs.onerror = () => visitorWs.close();
@@ -540,6 +531,8 @@ function clearHistory() {
 }
 
 function initAdmin() {
+  if (adminInited) return;
+  adminInited = true;
   connectAdmin();
   const input   = document.getElementById("admin-input");
   const sendBtn = document.getElementById("admin-send-btn");
@@ -792,8 +785,8 @@ function doLogin() {
       btn.textContent = "进入后台 →";
       err.textContent = "❌ 密码错误，请重试";
       const shell = document.querySelector(".login-shell");
-      shell.classList.add("login-shake");
-      setTimeout(() => shell.classList.remove("login-shake"), 400);
+      shell?.classList.add("login-shake");
+      setTimeout(() => shell?.classList.remove("login-shake"), 400);
       document.getElementById("login-pwd").value = "";
       document.getElementById("login-pwd").focus();
     }

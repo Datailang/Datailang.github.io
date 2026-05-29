@@ -569,6 +569,10 @@ function connectVisitor() {
   visitorWs.onopen = () => {
     document.getElementById("send-btn").disabled = false;
     document.getElementById("conn-banner")?.classList.add("hidden");
+    // 重连后后端是新会话，需把当前联网开关状态重新同步过去
+    if (webSearchEnabled) {
+      visitorWs.send(JSON.stringify({ type: "TOGGLE_WEBSEARCH", payload: { enabled: true } }));
+    }
   };
   visitorWs.onmessage = (e) => {
     const { type, payload } = JSON.parse(e.data);
